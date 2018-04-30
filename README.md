@@ -10,8 +10,11 @@ GPU: Nvidia Geforce 740M
 
 Batch File:
 1- I build compiled files in /build folder thus in order to accelerate testing process I delete /build folder in every build. Then I create a new /build folder and create compiled files there. 
+
 2- I compile the cuda files with NVCC. The -x cu parameter defines the language of the file that will be compiled. The parameters arch and code defines the virtual and real architecture of the GPU device. In my case, these options are sm_35 and compute_35 because of my own GPU device. In order to get compute capacity of the device, devicequery.exe can be used which is installed with CUDA toolkit automatically. In order to compile .cu file to relocatable device code, I used -dc option. We need to use this parameter. Because, I used cuBlas library which is pre-compile cuda library and in order to link with cublas without any error we need to compile our own cuda file as relocatable device code. 
+
 3- In linking process, we want to create a shared library to be used in Python as a module thus we add shared options. We also add arch and code options too as we did in compile step. Then we add required libraries and specifiy output file as .pyd file to be used in Pyhton.
+
 4- Finally, we copy our test python script to /build folder and run the script in /build.
 
 In order to run the cuda files correctly, libraries should be installed correctly. cuda_exp.cu, test.py and make.bat file should be located in same directory. User should have admin privileges to delete and create folders. 
