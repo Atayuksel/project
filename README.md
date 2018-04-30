@@ -31,6 +31,13 @@ In my case, it is located at "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA
 
 Then compile and link process should be run flawless.
 
+### driver.py
+The python script is used to parse the dataset and create more structured data. Currently, it is only used to parse the data and create input list to wordtovec algorithm. There are some missing parts in script file. I aimed to used numpy arrays in the beginning, when I started to implement wordtovec algorithm in c in order to speed up the process. Currently, the script outputs native python arrays. I use numpy arrays as I planned in test.py file. This will not be very time consuming task to do.
+
+### Problems
+I think, I'm facing with a race condition in the wordtovec implementation. Currently, I'm trying to understand and solve the problem. In small sets like test.py, there are not any problems. In real dataset, I faced with a problem. <br />
+I will also try to implement basic LSTM and CNN architectures in CUDA and compare the results. 
+
 ### Sources
 - https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/
 - https://docs.nvidia.com/cuda/cublas/
