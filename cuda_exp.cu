@@ -13,11 +13,11 @@
 __global__
 static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int lexiconSize,
 	int hiddenUnitCount, double* hiddenWeights, double* out){
-	
+
 	double *varHiddenUnits, *varOutputUnits;
 	cudaMalloc(&varHiddenUnits, (hiddenUnitCount * sizeof(double)));
 	cudaMalloc(&varOutputUnits, (lexiconSize * sizeof(double)));
-	
+
 	double learningFactor = 0.1;
 
 	const double alf = 1;
@@ -34,7 +34,7 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 		// obtain values of hidden units to varHiddenUnits
 		double *hiddenWeightsStartPointer = hiddenWeights + (sourceWordIdx * hiddenUnitCount);
 		memcpy(varHiddenUnits, hiddenWeightsStartPointer, (hiddenUnitCount * sizeof(double)));
-		
+
 		/*printf("[ ");
 		for (int i = 0; i < hiddenUnitCount; i++) {
 			printf("%f, ", varHiddenUnits[i]);
@@ -52,7 +52,7 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 			out, hiddenUnitCount,
 			beta,
 			varOutputUnits, 1);
-		
+
 		/*printf("[ ");
 		for (int i = 0; i < lexiconSize; i++) {
 			printf("%f, ", varOutputUnits[i]);
@@ -83,6 +83,8 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 			IdxUpWeight = upOutWeights + i * lexiconSize;
 			memcpy(IdxUpWeight, tmp, (lexiconSize * sizeof(double)));
 		}
+
+
 
 		// calculation update values for hidden layer weights
 		double *UpHidWeights, *tmpS, *IdxPointer;
@@ -185,7 +187,7 @@ static PyObject* trainNetwork(PyObject* self, PyObject* args)
 		printf("%f, ", randomNumsb[i]);
 	}
 	printf(" ]\n");*/
-	
+
 	errSync = cudaGetLastError();
 	printf("Sync kernel error: %s\n", cudaGetErrorString(errSync));
 
@@ -195,17 +197,17 @@ static PyObject* trainNetwork(PyObject* self, PyObject* args)
 		numberHiddenUnit, cudaRandA, cudaRandB);
 
 	cudaDeviceSynchronize();
-	
+
 	errSync = cudaGetLastError();
 	printf("Sync kernel error: %s\n", cudaGetErrorString(errSync));
-	
+
 	cudaMemcpy(randomNumsa, cudaRandA, (N * sizeof(double)), cudaMemcpyDeviceToHost);
 	cudaMemcpy(randomNumsb, cudaRandB, (N * sizeof(double)), cudaMemcpyDeviceToHost);
-	
+
 	errSync = cudaGetLastError();
 	printf("Sync kernel error: %s\n", cudaGetErrorString(errSync));
-	
-	
+
+
 	errSync = cudaGetLastError();
 	printf("Sync kernel error: %s\n", cudaGetErrorString(errSync));
 
@@ -220,10 +222,10 @@ static PyObject* trainNetwork(PyObject* self, PyObject* args)
 		printf("%f, ", randomNumsb[i]);
 	}
 	printf(" ]\n");*/
-	
+
 	cudaFree(cudaRandA);
 	cudaFree(cudaRandB);
-	
+
 	errSync = cudaGetLastError();
 	printf("Sync kernel error: %s\n", cudaGetErrorString(errSync));
 
