@@ -25,7 +25,7 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 	const double *alpha = &alf;
 	const double *beta = &bet;
 
-	printf("Size dataset is %d", sizeDataset);
+	printf("Size dataset is %d\n", sizeDataset);
 
 	for (int idx = 0; idx < sizeDataset; idx++) {
 		int sourceWordIdx = source_idx[idx];
@@ -35,11 +35,11 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 		double *hiddenWeightsStartPointer = hiddenWeights + (sourceWordIdx * hiddenUnitCount);
 		memcpy(varHiddenUnits, hiddenWeightsStartPointer, (hiddenUnitCount * sizeof(double)));
 
-		/*printf("[ ");
+		printf("[ ");
 		for (int i = 0; i < hiddenUnitCount; i++) {
 			printf("%f, ", varHiddenUnits[i]);
 		}
-		printf(" ]\n");*/
+		printf(" ]\n");
 
 		// obtain values of output units via dgemm
 		cublasHandle_t handle;
@@ -52,6 +52,8 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 			out, hiddenUnitCount,
 			beta,
 			varOutputUnits, 1);
+
+		cudaDeviceSynchronize();
 
 		/*printf("[ ");
 		for (int i = 0; i < lexiconSize; i++) {
@@ -84,8 +86,6 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 			memcpy(IdxUpWeight, tmp, (lexiconSize * sizeof(double)));
 		}
 
-
-
 		// calculation update values for hidden layer weights
 		double *UpHidWeights, *tmpS, *IdxPointer;
 		cudaMalloc(&UpHidWeights, (hiddenUnitCount * lexiconSize * sizeof(double)));
@@ -114,7 +114,7 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 			hiddenWeights[hiddenWeightIdx] = hiddenWeights[hiddenWeightIdx] + UpHidWeights[i];
 			out[i] = out[i] + upOutWeights[i];
 		}
-		printf("%d", idx);
+		// printf("%d", idx);
 	}
 }
 static PyObject* trainNetwork(PyObject* self, PyObject* args)
