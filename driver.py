@@ -1,4 +1,6 @@
 import nltk
+import numpy as np
+import wordtovec
 
 # parsin dataset.txt
 dataset = []
@@ -44,3 +46,9 @@ for data in dataset:
                 if j - k > 0:
                     sourceWordIdx.append(wordToIdx[tokenSen[j]])
                     targetWordIdx.append(wordToIdx[tokenSen[j-k]])
+
+source = np.asarray(sourceWordIdx)
+target = np.asarray(targetWordIdx)
+lexiconSize = len(wordToIdx)
+hiddenUnitNumber = 100
+wordtovec.trainNetwork(source, target, lexiconSize, hiddenUnitNumber)
