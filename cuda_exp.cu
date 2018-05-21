@@ -11,66 +11,138 @@
 #define METHOD  0
 
 __global__
+void parallelCpyArr(double *a, double *b, int length){
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+	int stride = blockDim.x * gridDim.x;
+	for(int i = index; i < length; i += stride){
+		a[i] = b[i];
+	}
+}
+
+__global__
+void divideArr(double *arr, int length, double total){
+		int index = blockIdx.x * blockDim.x + threadIdx.x;
+		int stride = blockDim.x * gridDim.x;
+		for (int i = index; i < length; i += stride){
+			arr[i] = arr[i] / total;
+		}
+}
+
+__global__
+void applyExponArr(double *outputValues, int lengthArr){
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+	int stride = blockDim.x * gridDim.x;
+	for (int i = index; i < lengthArr; i += stride){
+		outputValues[i] = exp(outputValues[i]);
+	}
+}
+
+__global__
+void updateWeights(double *outputWeights, double *outputWeightsUpdateTable, \
+										double *hiddenWeights, double *hiddenWeightsUpdateTable, \
+										int lexiconSize, int hiddenUnitCount){
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+  int stride = blockDim.x * gridDim.x;
+	int hiddenWeightIdx;
+	int hiddenUnitIdx = 0;
+	int lexiconIdx = 0;
+	for(int i = index; i < (hiddenUnitCount * lexiconSize); i += stride){
+		hiddenUnitIdx = i / lexiconSize;
+		lexiconIdx = i - (lexiconSize * hiddenUnitIdx);
+		hiddenWeightIdx = (hiddenUnitCount * lexiconIdx) + hiddenUnitIdx;
+		hiddenWeights[hiddenWeightIdx] = hiddenWeights[hiddenWeightIdx] \
+		+ hiddenWeightsUpdateTable[i];
+		outputWeights[i] = outputWeights[i] + outputWeightsUpdateTable[i];
+	}
+}
+
+__global__
+void dotProductKernel(double *a, double *b, double *c, int length){
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+  int stride = blockDim.x * gridDim.x;
+	if (index < length){
+		for (int i = index; i < length; i += stride){
+			c[i] = a[i] * b[i];
+		}
+	}
+}
+
+__global__
+void bphidden(double *outputWeights, double *outputUnitValues, \
+ 								int targetWordIdx, int sourceWordIdx, \
+								double *hiddenWeightsUpdateTable, int lexiconSize, int hiddenUnitCount) {
+	int index = threadIdx.x;
+	int stride = blockDim.x;
+	cublasHandle_t cubphid;
+	cublasCreate(&cubphid);
+	double inv = -1;
+	double zero = 0;
+
+	for (int i = index; i < hiddenUnitCount; i += stride){
+		double *tmp2, *tmp;
+		cudaMalloc(&tmp2, (1 * lexiconSize * sizeof(double)));
+		cudaMalloc(&tmp, (1 * lexiconSize * sizeof(double)));
+		double *IdxPointer = i * lexiconSize + outputWeights;
+		// memcpy(tmp2, IdxPointer, (lexiconSize * sizeof(double)));
+		// memcpy(tmp, outputUnitValues, (lexiconSize * sizeof(double)));
+		parallelCpyArr<<<2,2024>>>(tmp2, IdxPointer, lexiconSize);
+		parallelCpyArr<<<2,2024>>>(tmp, outputUnitValues, lexiconSize);
+		cublasDscal(cubphid, lexiconSize, &inv, tmp, 1);
+		tmp[targetWordIdx] = tmp[targetWordIdx] + 1;
+		dotProductKernel<<<2,1024>>>(tmp, tmp2, tmp, lexiconSize);
+		cublasDscal(cubphid, lexiconSize, &zero, tmp2, 1);
+		tmp2[sourceWordIdx] = tmp[sourceWordIdx] * 0.1;
+		IdxPointer = i * lexiconSize + hiddenWeightsUpdateTable;
+		// memcpy(IdxPointer, tmp2, (lexiconSize * sizeof(double)));
+		parallelCpyArr<<<2,2024>>>(IdxPointer, tmp2, lexiconSize);
+	}
+}
+
+__global__
 void bpoutput(double* outputUnitValues, double* hiddenUnitValues, \
 								int lexiconSize, double* updateWeightArr, \
-								int targetWordIdx) {
-
-	int i = threadIdx.x;
-
+								int targetWordIdx, int hiddenUnitCount) {
+	int index = threadIdx.x;
+	int stride = blockDim.x;
 	double *tmp;
-
 	cublasHandle_t cubpout;
 	cublasCreate(&cubpout);
-
-	cudaError_t errSync = cudaMalloc(&tmp, (1 * lexiconSize * sizeof(double)));
-	printf("tmp allocation in thread %d: %s\n",i, cudaGetErrorString(errSync));
-
-	memcpy(tmp, outputUnitValues, (lexiconSize * sizeof(double)));
-
 	double inv = -1;
-	cublasDscal(cubpout, lexiconSize, &inv, tmp, 1);
+	double mult;
 
-	tmp[targetWordIdx] = tmp[targetWordIdx] + 1;
-	double mult = 0.1 * hiddenUnitValues[i];
-
-	cublasDscal(cubpout, lexiconSize, &mult, tmp, 1);
-
-	double *IdxUpWeight = updateWeightArr + i * lexiconSize;
-
-	memcpy(IdxUpWeight, tmp, (lexiconSize * sizeof(double)));
-	printf("Exiting threadID: %d\n", i);
+	for(int i = index; i < hiddenUnitCount; i += stride){
+		cudaMalloc(&tmp, (1 * lexiconSize * sizeof(double)));
+		// memcpy(tmp, outputUnitValues, (lexiconSize * sizeof(double)));
+		parallelCpyArr<<<2,1024>>>(tmp, outputUnitValues, lexiconSize);
+		cublasDscal(cubpout, lexiconSize, &inv, tmp, 1);
+		tmp[targetWordIdx] = tmp[targetWordIdx] + 1;
+		mult = 0.1 * hiddenUnitValues[i];
+		cublasDscal(cubpout, lexiconSize, &mult, tmp, 1);
+		double *IdxUpWeight = updateWeightArr + i * lexiconSize;
+		// memcpy(IdxUpWeight, tmp, (lexiconSize * sizeof(double)));
+		parallelCpyArr<<<2,1024>>>(IdxUpWeight, tmp, lexiconSize);
+	}
 }
 
 __global__
 static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int lexiconSize,
 	int hiddenUnitCount, double* hiddenWeights, double* out){
-
 	double *varHiddenUnits, *varOutputUnits;
 	cudaMalloc(&varHiddenUnits, (hiddenUnitCount * sizeof(double)));
 	cudaMalloc(&varOutputUnits, (lexiconSize * sizeof(double)));
-
 	double learningFactor = 0.1;
-
 	const double alf = 1;
 	const double bet = 0;
 	const double *alpha = &alf;
 	const double *beta = &bet;
-
 	printf("Size dataset is %d\n", sizeDataset);
 
 	for (int idx = 0; idx < 1; idx++) {
 		int sourceWordIdx = source_idx[idx];
 		int targetWordIdx = target_idx[idx];
 
-		// obtain values of hidden units to varHiddenUnits
 		double *hiddenWeightsStartPointer = hiddenWeights + (sourceWordIdx * hiddenUnitCount);
 		memcpy(varHiddenUnits, hiddenWeightsStartPointer, (hiddenUnitCount * sizeof(double)));
-
-		printf("[ ");
-		for (int i = 0; i < hiddenUnitCount; i++) {
-			printf("%f, ", varHiddenUnits[i]);
-		}
-		printf(" ]\n");
 
 		// obtain values of output units via dgemm
 		cublasHandle_t handle;
@@ -83,89 +155,50 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 			varHiddenUnits, hiddenUnitCount,
 			beta,
 			varOutputUnits, lexiconSize);
+		cudaDeviceSynchronize();
 
+		applyExponArr<<<2,1024>>>(varOutputUnits, lexiconSize);
+		cudaDeviceSynchronize();
+		double total = 0;
+		for (int i = 0; i < lexiconSize; i++){
+			total += varOutputUnits[i];
+		}
+		divideArr<<<2,1024>>>(varOutputUnits, lexiconSize, total);
+		cudaDeviceSynchronize();
+
+		double *upOutWeights;
+		cudaMalloc(&upOutWeights, (hiddenUnitCount * lexiconSize * sizeof(double)));
+
+		printf("Backpropagating of 2nd layer weights: \n");
+		bpoutput<<<1,100>>>(varOutputUnits, varHiddenUnits, lexiconSize, \
+												upOutWeights, targetWordIdx, hiddenUnitCount);
 		cudaDeviceSynchronize();
 
 		cudaError_t errSync = cudaGetLastError();
 		printf("After dgemm function: %s\n", cudaGetErrorString(errSync));
 
-		/*printf("[ ");
-		for (int i = 0; i < lexiconSize; i++) {
-			printf("%f, ", varOutputUnits[i]);
-		}
-		printf(" ]\n");*/
-
-		double sumOutputUnits = 0.0;
-		for (int i = 0; i < lexiconSize; i++) {
-			sumOutputUnits = sumOutputUnits + varOutputUnits[i];
-		}
-
-		double valScal = (double)1 / sumOutputUnits;
-		cublasDscal(handle, lexiconSize, &valScal, varOutputUnits, 1);
-
-		errSync = cudaGetLastError();
-		printf("After dscal func: %s\n", cudaGetErrorString(errSync));
-
-		// calculation update values for output layer weights
-		double *upOutWeights, *IdxUpWeight;
-
-		errSync = cudaMalloc(&upOutWeights, (hiddenUnitCount * lexiconSize * sizeof(double)));
-		printf("after cudamalloc: %s\n", cudaGetErrorString(errSync));
-
-		double inv = -1;
-		double mult;
-		double zero = 0;
-
-		bpoutput<<<1,100>>>(varOutputUnits, varHiddenUnits, lexiconSize, \
-												upOutWeights, targetWordIdx);
-
-		cudaDeviceSynchronize();
-
-		// printf("[ ");
-		// for (int i = 0; i < lexiconSize; i++) {
-		// 	printf("%f, ", tmp[i]);
-		// }
-		// printf(" ]\n");
+		printf("2nd layer backpropagation is finish\n");
 
 		// calculation update values for hidden layer weights
-		double *UpHidWeights, *tmp, *tmpS, *IdxPointer;
+		double *UpHidWeights;
 		cudaMalloc(&UpHidWeights, (hiddenUnitCount * lexiconSize * sizeof(double)));
-		cudaMalloc(&tmpS, (lexiconSize * sizeof(double)));
-		cudaMalloc(&tmp, (lexiconSize * sizeof(double)));
-		for (int i = 0; i < hiddenUnitCount; i++) {
-			IdxPointer = i * lexiconSize + out;
-			memcpy(tmpS, IdxPointer, (lexiconSize * sizeof(double)));
-			memcpy(tmp, varOutputUnits, (lexiconSize * sizeof(double)));
-			cublasDscal(handle, lexiconSize, &inv, tmp, 1);
-			tmp[targetWordIdx] = tmp[targetWordIdx] + 1;
-			for (int j = 0; j < lexiconSize; j++) {
-				tmp[j] = tmp[j] * tmpS[j];
-			}
-			cublasDscal(handle, lexiconSize, &zero, tmpS, 1);
-			tmpS[sourceWordIdx] = tmp[sourceWordIdx] * learningFactor;
-			IdxPointer = i * lexiconSize + UpHidWeights;
-			memcpy(IdxPointer, tmpS, (lexiconSize * sizeof(double)));
-		}
 
-		errSync = cudaGetLastError();
-		printf("After calculation update values for output weights: %s\n", cudaGetErrorString(errSync));
+		printf("Calling backpropagation for 1st layer\n");
+		bphidden<<<1,100>>>(out, varOutputUnits, targetWordIdx, sourceWordIdx, \
+											UpHidWeights, lexiconSize, hiddenUnitCount);
+		cudaDeviceSynchronize();
+		printf("1st layer backpropagation is finished\n");
 
-		int hiddenWeightIdx;
-		int hiddenUnitIdx = 0;
-		int lexiconIdx = 0;
-		for (int i = 0; i < lexiconSize * hiddenUnitCount; i++) {
-			hiddenUnitIdx = i / lexiconSize;
-			lexiconIdx = i - (lexiconSize * hiddenUnitIdx);
-			hiddenWeightIdx = (hiddenUnitCount * lexiconIdx) + hiddenUnitIdx;
-			hiddenWeights[hiddenWeightIdx] = hiddenWeights[hiddenWeightIdx] + UpHidWeights[i];
-			out[i] = out[i] + upOutWeights[i];
-		}
-		errSync = cudaGetLastError();
-		printf("After calculating hidden weights: %s\n", cudaGetErrorString(errSync));
-		// printf("%d", idx);
+		printf("Calling update weights function\n");
+		updateWeights<<<2,1024>>>(out, upOutWeights, \
+															hiddenWeights, UpHidWeights, \
+															lexiconSize, hiddenUnitCount);
+		cudaDeviceSynchronize();
+		printf("Updating weights is finished\n");
 
 	}
 }
+
 static PyObject* trainNetwork(PyObject* self, PyObject* args)
 {
 	PyArrayObject *arr_np_source, *arr_np_target;
@@ -223,20 +256,6 @@ static PyObject* trainNetwork(PyObject* self, PyObject* args)
 	cudaMemcpy(cudaRandB, randomNumsb, (N * sizeof(double)), cudaMemcpyHostToDevice);
 	errSync = cudaGetLastError();
 	printf("Sync kernel error: %s\n", cudaGetErrorString(errSync));
-
-
-	// print weights before kernel
-	/*printf("[ ");
-	for (int i = 0; i < N; i++) {
-		printf("%f, ", randomNumsa[i]);
-	}
-	printf(" ]\n");
-	printf("[ ");
-	for (int i = 0; i < N; i++) {
-		printf("%f, ", randomNumsb[i]);
-	}
-	printf(" ]\n");*/
-
 	errSync = cudaGetLastError();
 	printf("Sync kernel error: %s\n", cudaGetErrorString(errSync));
 
@@ -249,14 +268,13 @@ static PyObject* trainNetwork(PyObject* self, PyObject* args)
 	errSync = cudaDeviceGetLimit(&total, limit);
 	printf("cuda device get limit: %s\n", cudaGetErrorString(errSync));
 	printf("Device Limit: %d\n", total/1024);
-	errSync = cudaDeviceSetLimit(limit, total*10);
+	errSync = cudaDeviceSetLimit(limit, total*50);
 	printf("cuda set device limit %s\n", errSync);
 	printf("new device limit is:%d\n", total*10/1024);
 
 	clock_t begin = clock();
 	_trainNetwork<<<1,1>>>(sizeTrainingSet, gpu_arr_source, gpu_arr_target, lexiconSize,
 		numberHiddenUnit, cudaRandA, cudaRandB);
-
 
 	cudaDeviceSynchronize();
 	clock_t end = clock();
@@ -272,18 +290,6 @@ static PyObject* trainNetwork(PyObject* self, PyObject* args)
 
 	errSync = cudaGetLastError();
 	printf("Sync kernel error: %s\n", cudaGetErrorString(errSync));
-
-	/*printf("[ ");
-	for (int i = 0; i < N; i++) {
-		printf("%f, ", randomNumsa[i]);
-	}
-	printf(" ]\n");
-
-	printf("[ ");
-	for (int i = 0; i < N; i++) {
-		printf("%f, ", randomNumsb[i]);
-	}
-	printf(" ]\n");*/
 
 	cudaFree(cudaRandA);
 	cudaFree(cudaRandB);
