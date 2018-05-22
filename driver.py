@@ -17,6 +17,8 @@ with open('dataset.txt') as fp:
 
 tokenList = []
 wordToIdx = {}
+idxToWord = {}
+
 idx = 0
 for data in dataset:
     review = data[-1]
@@ -26,6 +28,7 @@ for data in dataset:
         for token in tokens:
             if token not in wordToIdx:
                 wordToIdx[token] = idx
+                idxToWord[idx] = token
                 idx += 1
         tokenList.append(tokens)
     data[-1] = tokenList
@@ -51,4 +54,14 @@ source = np.asarray(sourceWordIdx)
 target = np.asarray(targetWordIdx)
 lexiconSize = len(wordToIdx)
 hiddenUnitNumber = 100
-wordtovec.trainNetwork(source, target, lexiconSize, hiddenUnitNumber)
+result = wordtovec.trainNetwork(source, target, lexiconSize, hiddenUnitNumber)
+
+thefile = open('results.txt', 'w');
+for i in range(lexiconSize):
+    word = idxToWord[i]
+    thefile.write("%s    "%word)
+    for j in range(hiddenUnitNumber):
+        idx = j * lexiconSize + i
+        value = result[idx];
+        thefile.write("%.3f "%value)
+    thefile.write("\n")
