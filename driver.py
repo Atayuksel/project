@@ -53,7 +53,7 @@ for data in dataset:
 source = np.asarray(sourceWordIdx)
 target = np.asarray(targetWordIdx)
 lexiconSize = len(wordToIdx)
-hiddenUnitNumber = 100
+hiddenUnitNumber = 300
 result = wordtovec.trainNetwork(source, target, lexiconSize, hiddenUnitNumber)
 
 thefile = open('results.txt', 'w');

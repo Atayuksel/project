@@ -176,7 +176,7 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 	// bool afterfDgemm = false;
 	//
 	// bool beforeoDgemm = false;
-	
+
 	bool flag = false;
 
 	double *upOutWeights;
@@ -262,7 +262,7 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 		// 	}
 		// }
 
-		bpoutput<<<1,100>>>(varOutputUnits, varHiddenUnits, lexiconSize, \
+		bpoutput<<<1,300>>>(varOutputUnits, varHiddenUnits, lexiconSize, \
 												upOutWeights, targetWordIdx, hiddenUnitCount);
 		cudaDeviceSynchronize();
 
@@ -274,7 +274,7 @@ static void _trainNetwork(int sizeDataset, int* source_idx, int*target_idx, int 
 
 
 
-		bphidden<<<1,100>>>(out, varOutputUnits, targetWordIdx, sourceWordIdx, \
+		bphidden<<<1,300>>>(out, varOutputUnits, targetWordIdx, sourceWordIdx, \
 											UpHidWeights, lexiconSize, hiddenUnitCount);
 		cudaDeviceSynchronize();
 		// printf("1st layer backpropagation is finished\n");
