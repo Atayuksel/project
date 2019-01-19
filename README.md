@@ -1,4 +1,4 @@
-# Term Project
+# Project
 
 ### Environment
 - Operating System: Windows 8.1
